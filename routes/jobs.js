@@ -6,7 +6,7 @@ var job = require('../controllers/job');
 
 /* Begin job search process */
 router.get('/',
-	job.beginPeopleSearch
+  job.beginPeopleSearch
 );
 
 module.exports = router;

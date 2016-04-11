@@ -61,6 +61,3 @@ app.use(function(err, req, res, next) {
 });
 
 module.exports = app;
-
-// require db
-require(APP_ROOT + '/models/db_connect.js');
