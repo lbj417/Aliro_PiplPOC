@@ -51,7 +51,7 @@ exports.searchCloudSearch = function(jobData, callback) {
   var params = {
       queryParser: 'lucene'
     , return: 'person_e'
-    , size: 10
+    , size: 700
     , query: query
     , start: 0
   };
@@ -62,7 +62,7 @@ exports.searchCloudSearch = function(jobData, callback) {
     if (err) {
       return callback(500);
     }
-    
+
     searchResult.hits.hit.forEach(person => {
       if (person && person.fields && person.fields.person_e && person.fields.person_e.length) {
         person.fields.person_e
@@ -70,6 +70,10 @@ exports.searchCloudSearch = function(jobData, callback) {
         .forEach(name => people.push({name: name, id: person.id}));
       }
     });
+
+    if (people.length > params.size) {
+      people.splice(0, people.length - params.size);
+    }
 
     return callback(null, people);
   });
@@ -89,7 +93,7 @@ exports.sendPeopleToPipl = function(people, callback) {
     var stats = {
         single_person: 0
       , possible_person: 0
-      , other: 0
+      , non_match: 0
     };
 
     // pipl limits API calls to 20 per second, so we will split up the array...
@@ -111,25 +115,21 @@ exports.sendPeopleToPipl = function(people, callback) {
             , match_requirements: '(emails and jobs)'
           }
         });
-        request(path, function(err, response, body) {
-          body = JSON.parse(body);
-          console.log('body', body.person);
-          // TODO store in our pipl mongodb
-          //db.collection('person').insert
+        request({url: path, json: true}, function(err, response, body) {
           if (err || !body) {
             // log error and move on
-            console.log('Error or no body occurred at 115! ', err, body);
+            console.log('Error or no body in PIPL response ', err, body);
             innerCb();
           }
           else {
             if (body.person) {
               // a single person was matched to the query -- save the person
-              var p = Object.assign({full_person: false}, body.person);
+              // TODO this may be considered a full_person - see https://pipl.com/dev/reference/#search-pointer
+              var p = Object.assign({full_person: true}, body.person);
               Person.insert({data: p}, function(err, result) {
                 if (err) {
                   // log error
-                  console.log('Error occurred at 125! ', err, result);
-                  //console.error('Error inserting single person object: ', err);
+                  console.log('Error inserting a single person object ', err, result);
                 }
                 else {
                   stats.single_person++;
@@ -138,7 +138,6 @@ exports.sendPeopleToPipl = function(people, callback) {
               });
             }
             else if (body.possible_persons) {
-              console.info('ALERT! Possible persons! ', body);
               async.each(body.possible_persons, function(person, saveCb) {
                 var p = Object.assign({full_person: false}, person);
                 Person.insert({data: p}, function(err, result) {
@@ -156,8 +155,8 @@ exports.sendPeopleToPipl = function(people, callback) {
             }
             else {
               // match containing required fields was not found
-              console.log('Match found with no person or possible_persons. What am I? ', body);
-              stats.other++;
+              console.log('Non match received.');
+              stats.non_match++;
               innerCb();
             }
           }
@@ -168,6 +167,7 @@ exports.sendPeopleToPipl = function(people, callback) {
       });
     }, function(err) {
       db.close();
+      console.log('Final stats: ', stats);
       return callback(null, stats);
     });
   });
@@ -183,7 +183,7 @@ exports.searchJobTitle = function(jobDetails, callback) {
     var Person = db.collection('person');
     var peopleToReturn, peopleToQuery;
     //TODO remove this
-    jobDetails.title = 'software developer';
+    jobDetails.title = 'Software Engineer';
 
     Person.find({'data.jobs': {$elemMatch: {title: {$regex: jobDetails.title, $options: 'i'}}}}).toArray(function(err, docs) {
       if (!err && docs) {

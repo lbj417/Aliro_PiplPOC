@@ -1,0 +1,31 @@
+extends layout
+
+block content
+  h1 Search PIPL for Sample Job
+  div.startSearch
+    form(method="post", action="/jobs")
+      div
+        if launchPage
+          input.btn.btn-primary(type="submit", value="Go!")
+
+  div
+    h2= jobTitle
+
+  if !launchPage
+    div
+      h4 Results from Initial PIPL Search:
+      p Single person matches: #{stats.single_person}
+      p Possible person matches: #{stats.possible_person}
+      p Non-matches: #{stats.non_match}
+    div
+      h4 Matches based on Job Title
+      table.matchResults.table
+        thead
+          tr
+            th Match Name
+            th Match Email
+        tbody
+          each match in matches
+            tr
+              td #{match.data.names[0].display}
+              td #{match.data.emails[0].address}

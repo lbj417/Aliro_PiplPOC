@@ -1,5 +1,9 @@
 var job = require('../services/job.js');
 
+exports.launchPage = function(req, res) {
+  res.render('job', {launchPage: true});
+};
+
 exports.beginPeopleSearch = function(req, res) {
   // using a hard coded jobId for POC for now
   var jobId = process.env.JOB_ID;
@@ -12,7 +16,7 @@ exports.beginPeopleSearch = function(req, res) {
         if (!err) {
           job.sendPeopleToPipl(people, function(err, results) {
             job.searchJobTitle(jobDetails, function(err, matches) {
-              res.status(200).json(matches);
+              res.render('job', {jobTitle: jobDetails.title, matches: matches, stats: results});
             });
           });
         }
