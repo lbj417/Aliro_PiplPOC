@@ -56,7 +56,8 @@ exports.searchCloudSearch = function(jobData, callback) {
     , start: 0
   };
 
-  let people = [];
+  let people = {};
+  let names = [];
   
   csd.search(params, function(err, searchResult) {
     if (err) {
@@ -67,19 +68,21 @@ exports.searchCloudSearch = function(jobData, callback) {
       if (person && person.fields && person.fields.person_e && person.fields.person_e.length) {
         person.fields.person_e
         .filter(isValidName)
-        .forEach(name => people.push({name: name, id: person.id}));
+        .forEach(name => people[name] = person.id);
       }
     });
 
-    if (people.length > params.size) {
-      people.splice(0, people.length - params.size);
+    names = Object.keys(people);
+
+    if (names.length > params.size) {
+      names.splice(0, names.length - params.size);
     }
 
-    return callback(null, people);
+    return callback(null, names);
   });
 };
 
-exports.sendPeopleToPipl = function(people, callback) {
+exports.sendNamesToPipl = function(names, callback) {
   MongoClient.connect(process.env.MONGODB_PIPL_DSN, function(err, db) {
     // we will be saving this data to our PIPL db, so if we can't connect, error out
     if (err) {
@@ -98,19 +101,19 @@ exports.sendPeopleToPipl = function(people, callback) {
 
     // pipl limits API calls to 20 per second, so we will split up the array...
     var CHUNK_SIZE = 20;
-    for (var i = 0; i < people.length; i += CHUNK_SIZE) {
-      meta.push(people.slice(i, i + CHUNK_SIZE));
+    for (var i = 0; i < names.length; i += CHUNK_SIZE) {
+      meta.push(names.slice(i, i + CHUNK_SIZE));
     }
 
     // go through each array of 20 people
-    async.eachSeries(meta, function(personArr, outerCb) {
+    async.eachSeries(meta, function(namesArr, outerCb) {
       // loop through each person in the smaller array
-      async.each(personArr, function(person, innerCb) {
+      async.each(namesArr, function(name, innerCb) {
         var path = url.format({
           pathname: 'https://api.pipl.com/search/',
           query: {
               key: process.env.PIPL_API_KEY || 'sample_key'
-            , raw_name: person.name
+            , raw_name: name
             , country: 'US'
             , match_requirements: '(emails and jobs)'
           }
@@ -185,7 +188,7 @@ exports.searchJobTitle = function(jobDetails, callback) {
     //TODO remove this
     jobDetails.title = 'Software Engineer';
 
-    Person.find({'data.jobs': {$elemMatch: {title: {$regex: jobDetails.title, $options: 'i'}}}}).toArray(function(err, docs) {
+    Person.find({'data.jobs.title': {$regex: jobDetails.title, $options: 'i'}}).toArray(function(err, docs) {
       if (!err && docs) {
         // separate out those we need to make add'l API call for...
         var partition = _.partition(docs, function(elem) {

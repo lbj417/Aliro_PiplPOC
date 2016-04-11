@@ -12,9 +12,9 @@ exports.beginPeopleSearch = function(req, res) {
       res.status(err).end();
     }
     else {
-      job.searchCloudSearch(jobDetails, function(err, people) {
+      job.searchCloudSearch(jobDetails, function(err, names) {
         if (!err) {
-          job.sendPeopleToPipl(people, function(err, results) {
+          job.sendNamesToPipl(names, function(err, results) {
             job.searchJobTitle(jobDetails, function(err, matches) {
               res.render('job', {jobTitle: jobDetails.title, matches: matches, stats: results});
             });
