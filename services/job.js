@@ -55,6 +55,10 @@ exports.searchCloudSearch = function(jobData, callback) {
     , query: query
     , start: 0
   };
+console.log(process.env.TEST_MODE);
+  if (process.env.TEST_MODE === 'true') {
+    //params.size = 400;
+  }
 
   let people = {};
   let names = [];
@@ -82,7 +86,7 @@ exports.searchCloudSearch = function(jobData, callback) {
   });
 };
 
-exports.sendNamesToPipl = function(names, callback) {
+exports.sendNamesToPipl = function(jobTitle, names, callback) {
   MongoClient.connect(process.env.MONGODB_PIPL_DSN, function(err, db) {
     // we will be saving this data to our PIPL db, so if we can't connect, error out
     if (err) {
@@ -94,8 +98,10 @@ exports.sendNamesToPipl = function(names, callback) {
     var Person = db.collection('person');
     var meta = [];
     var stats = {
-        single_person: 0
-      , possible_person: 0
+        single_person_email: 0
+      , single_person_no_email: 0
+      , possible_person_response: 0
+      , possible_persons: 0
       , non_match: 0
     };
 
@@ -113,9 +119,12 @@ exports.sendNamesToPipl = function(names, callback) {
           pathname: 'https://api.pipl.com/search/',
           query: {
               key: process.env.PIPL_API_KEY || 'sample_key'
-            , raw_name: name
-            , country: 'US'
-            , match_requirements: '(emails and jobs)'
+            , person: JSON.stringify({
+                'names': [{'raw': name}]
+              //, 'jobs': [{title: jobTitle}]
+              , 'addresses': [{country: 'US'}]
+            })
+            , minimum_match: 0.1
           }
         });
         request({url: path, json: true}, function(err, response, body) {
@@ -126,29 +135,37 @@ exports.sendNamesToPipl = function(names, callback) {
           }
           else {
             if (body.person) {
-              // a single person was matched to the query -- save the person
-              // TODO this may be considered a full_person - see https://pipl.com/dev/reference/#search-pointer
-              var p = Object.assign({full_person: true}, body.person);
-              Person.insert({data: p}, function(err, result) {
-                if (err) {
-                  // log error
-                  console.log('Error inserting a single person object ', err, result);
-                }
-                else {
-                  stats.single_person++;
-                }
+              // only save full person matches who have an email address
+              if (body.person.emails && body.person.emails.length) {
+                // a single person was matched to the query -- save the person
+                // TODO this may be considered a full_person - see https://pipl.com/dev/reference/#search-pointer
+                var p = Object.assign({full_person: true, person_type: 'single'}, body.person);
+                Person.insert({data: p}, function(err, result) {
+                  if (err) {
+                    console.log('Error inserting a single person object ', err, result);
+                  }
+                  else {
+                    stats.single_person_email++;
+                  }
+                  innerCb();
+                });
+              }
+              else {
+                // single person found, but they don't have emails
+                stats.single_person_no_email++;
                 innerCb();
-              });
+              }
             }
             else if (body.possible_persons) {
+              stats.possible_person_response++;
               async.each(body.possible_persons, function(person, saveCb) {
-                var p = Object.assign({full_person: false}, person);
+                var p = Object.assign({full_person: false, person_type: 'possible'}, person);
                 Person.insert({data: p}, function(err, result) {
                   if (err) {
                     console.log('Error occurred inserting a possible person object: ', err);
                   }
                   else {
-                    stats.possible_person++;
+                    stats.possible_persons++;
                   }
                   saveCb();
                 });
@@ -157,7 +174,7 @@ exports.sendNamesToPipl = function(names, callback) {
               });
             }
             else {
-              // match containing required fields was not found
+              // non match
               console.log('Non match received.');
               stats.non_match++;
               innerCb();
@@ -170,6 +187,7 @@ exports.sendNamesToPipl = function(names, callback) {
       });
     }, function(err) {
       db.close();
+      stats.single_persons = stats.single_person_email + stats.single_person_no_email;
       console.log('Final stats: ', stats);
       return callback(null, stats);
     });
@@ -185,8 +203,6 @@ exports.searchJobTitle = function(jobDetails, callback) {
 
     var Person = db.collection('person');
     var peopleToReturn, peopleToQuery;
-    //TODO remove this
-    jobDetails.title = 'Software Engineer';
 
     Person.find({'data.jobs.title': {$regex: jobDetails.title, $options: 'i'}}).toArray(function(err, docs) {
       if (!err && docs) {
@@ -216,6 +232,7 @@ exports.searchJobTitle = function(jobDetails, callback) {
               query: {
                   key: process.env.PIPL_API_KEY || 'sample_key'
                 , search_pointer: person.data['@search_pointer']
+                , match_requirements: 'emails'
               }
             });
             request({url: path, json: true}, function(err, response, body) {
@@ -224,7 +241,7 @@ exports.searchJobTitle = function(jobDetails, callback) {
                 innerCb();
               }
               else {
-                var p = Object.assign({full_person: true}, body.person);
+                var p = Object.assign({full_person: true, person_type: person.data.person_type}, body.person);
                 Person.findOneAndUpdate({_id: person._id}
                   , {$set: {data: p}}
                   , {

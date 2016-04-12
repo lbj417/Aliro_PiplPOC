@@ -14,9 +14,9 @@ exports.beginPeopleSearch = function(req, res) {
     else {
       job.searchCloudSearch(jobDetails, function(err, names) {
         if (!err) {
-          job.sendNamesToPipl(names, function(err, results) {
+          job.sendNamesToPipl(jobDetails.title, names, function(err, results) {
             job.searchJobTitle(jobDetails, function(err, matches) {
-              res.render('job', {jobTitle: jobDetails.title, matches: matches, stats: results});
+              res.render('job', {jobTitle: jobDetails.title, matches: matches, stats: results, searchSize: names.length});
             });
           });
         }

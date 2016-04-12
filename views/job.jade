@@ -13,12 +13,17 @@ block content
 
   if !launchPage
     div
-      h4 Results from Initial PIPL Search:
-      p Single person matches: #{stats.single_person}
-      p Possible person matches: #{stats.possible_person}
+      h4 Results from Initial PIPL Search with #{searchSize} names:
+      p Single person matches: #{stats.single_persons}
+      p Possible person matches: #{stats.possible_person_response}
       p Non-matches: #{stats.non_match}
+
+      h4 Saved to Persons Database:
+      p Single person matches with email: #{stats.single_person_email}
+      p Possible person matches: #{stats.possible_persons}
+
     div
-      h4 Matches based on Job Title
+      h4 Matches based on Job Title:
       table.matchResults.table
         thead
           tr
