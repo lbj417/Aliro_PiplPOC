@@ -55,10 +55,6 @@ exports.searchCloudSearch = function(jobData, callback) {
     , query: query
     , start: 0
   };
-console.log(process.env.TEST_MODE);
-  if (process.env.TEST_MODE === 'true') {
-    //params.size = 400;
-  }
 
   let people = {};
   let names = [];

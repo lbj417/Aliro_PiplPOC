@@ -4,9 +4,13 @@ exports.launchPage = function(req, res) {
   res.render('job', {launchPage: true});
 };
 
+exports.launch = function(req, res) {
+  res.redirect('/jobs/' + process.env.JOB_ID);
+};
+
 exports.beginPeopleSearch = function(req, res) {
   // using a hard coded jobId for POC for now
-  var jobId = process.env.JOB_ID;
+  var jobId = req.params.jobId;
   job.getJobDetails(jobId, function(err, jobDetails) {
     if (err) {
       res.status(err).end();

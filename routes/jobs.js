@@ -10,6 +10,10 @@ router.get('/',
 );
 
 router.post('/',
+  job.launch
+);
+
+router.get('/:jobId',
   job.beginPeopleSearch
 );
 
